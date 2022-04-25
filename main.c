@@ -70,7 +70,7 @@ int main() {
             //Interpretation
             int a;
             char x[STRINGSIZE];
-            if(strncmp(in, "PUT",3) == 0) {
+            if(strncmp(in, "PUT ",4) == 0) {
                 char *ptr = strtok(in, " ");
                 char *keyptr = strtok(NULL, " ");
                 char *valptr = strtok(NULL, "\r");
@@ -99,7 +99,7 @@ int main() {
                 }
             }
 
-            if(strncmp(in, "GET",3) == 0) {
+            else if(strncmp(in, "GET ",4) == 0) {
                 char *ptr = strtok(in, " ");
                 char *keyptr = strtok(NULL, "\r");
 
@@ -122,7 +122,7 @@ int main() {
                 }
             }
 
-            if(strncmp(in, "DEL",3) == 0){
+            else if(strncmp(in, "DEL ",4) == 0){
                 char *ptr = strtok(in, " ");
                 char *keyptr = strtok(NULL, "\r");
                 if(keyptr == NULL) {
@@ -141,8 +141,11 @@ int main() {
                     write(cfd, y, strlen(y));
                 }
             }
-            if(strncmp(in, "QUIT",4) == 0)
+            else if(strncmp(in, "QUIT\r",5) == 0)
                 close(cfd);
+
+            else
+                write(cfd,"command_nonexistent\n",20);
             //Interpretation Ende
 
 
