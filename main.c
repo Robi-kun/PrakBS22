@@ -7,7 +7,6 @@
 #define PORT 5678
 #define STRINGSIZE 100
 
-
 int main() {
 
     arrayEinrichten();
@@ -70,10 +69,12 @@ int main() {
             //Interpretation
             int a;
             char x[STRINGSIZE];
-            if(strncmp(in, "PUT ",4) == 0) {
-                char *ptr = strtok(in, " ");
+            char* command = strtok(in, " ");
+            if(strcmp(command, "PUT") == 0) {
                 char *keyptr = strtok(NULL, " ");
                 char *valptr = strtok(NULL, "\r");
+                puts(keyptr);
+                puts(valptr);
                 if(keyptr == NULL || valptr == NULL) {
                     write(cfd, "command_nonexistent\n", 20);
                 }
@@ -99,8 +100,7 @@ int main() {
                 }
             }
 
-            else if(strncmp(in, "GET ",4) == 0) {
-                char *ptr = strtok(in, " ");
+            else if(strcmp(command, "GET") == 0) {
                 char *keyptr = strtok(NULL, "\r");
 
                 if(keyptr == NULL) {
@@ -122,8 +122,7 @@ int main() {
                 }
             }
 
-            else if(strncmp(in, "DEL ",4) == 0){
-                char *ptr = strtok(in, " ");
+            else if(strcmp(command, "DEL") == 0){
                 char *keyptr = strtok(NULL, "\r");
                 if(keyptr == NULL) {
                     write(cfd, "command_nonexistent\n", 20);
@@ -141,7 +140,7 @@ int main() {
                     write(cfd, y, strlen(y));
                 }
             }
-            else if(strncmp(in, "QUIT\r",5) == 0)
+            else if(strncmp(in, "QUIT\r", 5) == 0)
                 close(cfd);
 
             else
