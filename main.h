@@ -1,6 +1,9 @@
 #ifndef PRAKBS22_MAIN_H
 #define PRAKBS22_MAIN_H
 
+#define BUFFSIZE 1024 // Größe des Buffers
+#define PORT 5678
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
