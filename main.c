@@ -8,11 +8,6 @@ int main() {
     arrayEinrichten();
 
     int rfd; // Rendevouz-Descriptor
-    int cfd; // Verbindungs-Descriptor
-
-    struct sockaddr_in client; // Socketadresse eines Clients
-    socklen_t client_len; // Länge der Client-Daten
-
 
     // Socket erstellen
     rfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -46,10 +41,7 @@ int main() {
         exit(-1);
     }
 
-        // Verbindung eines Clients wird entgegengenommen
-        cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
-
-        connect_handle(cfd);
+    run(rfd);
 
     // Rendevouz Descriptor schließen
     shutdown(rfd, SHUT_RDWR);

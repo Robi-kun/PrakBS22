@@ -11,15 +11,11 @@
 #include <netinet/in.h>
 #include "main.h"
 
-int sonderzeichen(char *string);
-
 /*
- * Handels connection with client
- *
+ * Handels application logic
  * RETURN:
- * -1: Can't receive massage from client
- * 1: Client ended session
+ * 0: No Errors
  */
-int connect_handle(int cfd);
+int run();
 
 #endif //PRAKBS22_SUB_H

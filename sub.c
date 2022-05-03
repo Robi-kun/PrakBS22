@@ -30,6 +30,13 @@ int sonderzeichen(char *string){
     return 1;
 }
 
+/*
+ * Handels connection with client
+ *
+ * RETURN:
+ * -1: Can't receive massage from client
+ * 1: Client ended session
+ */
 int connect_handle(int conn_fd) {
     char in[BUFFSIZE], out[BUFFSIZE];
 
@@ -124,4 +131,16 @@ int connect_handle(int conn_fd) {
 
         send(conn_fd, out, BUFFSIZE, 0);
     }
+}
+
+int run(int serv_fd) {
+    struct sockaddr_in client; // Socketadresse eines Clients
+    socklen_t client_len; // Länge der Client-Daten
+
+    // Verbindung eines Clients wird entgegengenommen
+    int cfd = accept(serv_fd, (struct sockaddr *) &client, &client_len);
+
+    connect_handle(cfd);
+
+    return 0;
 }
