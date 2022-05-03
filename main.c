@@ -46,14 +46,12 @@ int main() {
         exit(-1);
     }
 
-    while (ENDLOSSCHLEIFE) {
         // Verbindung eines Clients wird entgegengenommen
         cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
 
         connect_handle(cfd);
-    }
 
     // Rendevouz Descriptor schließen
-    close(rfd);
+    shutdown(rfd, SHUT_RDWR);
 
 }
