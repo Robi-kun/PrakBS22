@@ -24,12 +24,22 @@ Command interpret(char* command) {
 
 int sonderzeichen(char *string){
     for(int i = 0; i < strlen(string); i++) {
-        if (!((int) string[i] >= 48 && (int) string[i] <= 57 || (int) string[i] >= 65 && (int) string[i] <= 90 || (int) string[i] >= 97 && (int) string[i] <= 122 || (int) string[i] == 32) ) //ASCII: 48-57, 65-90, 97-122, 32
+        if (!((int) string[i] >= 48 && (int) string[i] <= 57
+        || (int) string[i] >= 65 && (int) string[i] <= 90
+        || (int) string[i] >= 97 && (int) string[i] <= 122
+        || (int) string[i] == 32)) //ASCII: 48-57, 65-90, 97-122, 32
             return 0;
     }
     return 1;
 }
 
+/*
+ * Handels connection with client
+ *
+ * RETURN:
+ * -1: Can't receive massage from client
+ * 1: Client ended session
+ */
 int connect_handle(int conn_fd) {
     char in[BUFFSIZE], out[BUFFSIZE];
 
@@ -124,4 +134,17 @@ int connect_handle(int conn_fd) {
 
         send(conn_fd, out, BUFFSIZE, 0);
     }
+}
+
+int run(int serv_fd) {
+    struct sockaddr_in client; // Socketadresse eines Clients
+    socklen_t client_len; // Länge der Client-Daten
+    int error = 0;
+
+    // Verbindung eines Clients wird entgegengenommen
+    int cfd = accept(serv_fd, (struct sockaddr *) &client, &client_len);
+
+    error = connect_handle(cfd);
+
+    return error;
 }
