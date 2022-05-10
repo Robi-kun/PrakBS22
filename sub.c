@@ -136,6 +136,18 @@ int connect_handle(int conn_fd) {
     }
 }
 
+int spawn_process(int cfd) {
+    int pid = fork();
+    if(pid == 0) {
+        connect_handle(cfd);
+        puts("Prozess beendet");
+        exit(0);
+    }
+    printf("Process: %i started\n", pid);
+
+    return 0;
+}
+
 int run(int serv_fd) {
     struct sockaddr_in client; // Socketadresse eines Clients
     socklen_t client_len; // Länge der Client-Daten
@@ -148,13 +160,7 @@ int run(int serv_fd) {
             perror("Can't accept connection");
             exit(-1);
         }
-        int pid = fork();
-        if(pid == 0) {
-            connect_handle(cfd);
-            puts("Prozess beendet");
-            exit(0);
-        }
-        printf("Process: %i started\n", pid);
+        spawn_process(cfd);
     }
 
     return error;
