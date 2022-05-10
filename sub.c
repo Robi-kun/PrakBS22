@@ -143,6 +143,10 @@ int run(int serv_fd) {
 
     // Verbindung eines Clients wird entgegengenommen
     int cfd = accept(serv_fd, (struct sockaddr *) &client, &client_len);
+    if(cfd == -1) {
+        perror("Can't accept connection");
+        exit(-1);
+    }
 
     error = connect_handle(cfd);
 
