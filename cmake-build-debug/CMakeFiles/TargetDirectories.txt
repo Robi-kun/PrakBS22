@@ -1,3 +1,0 @@
-C:/Users/AI Robin/CLionProjects/PrakBS22/cmake-build-debug/CMakeFiles/PrakBS22.dir
-C:/Users/AI Robin/CLionProjects/PrakBS22/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/AI Robin/CLionProjects/PrakBS22/cmake-build-debug/CMakeFiles/rebuild_cache.dir
