@@ -142,13 +142,20 @@ int run(int serv_fd) {
     int error = 0;
 
     // Verbindung eines Clients wird entgegengenommen
-    int cfd = accept(serv_fd, (struct sockaddr *) &client, &client_len);
-    if(cfd == -1) {
-        perror("Can't accept connection");
-        exit(-1);
+    while(1) {
+        int cfd = accept(serv_fd, (struct sockaddr *) &client, &client_len);
+        if(cfd == -1) {
+            perror("Can't accept connection");
+            exit(-1);
+        }
+        int pid = fork();
+        if(pid == 0) {
+            connect_handle(cfd);
+            puts("Prozess beendet");
+            exit(0);
+        }
+        printf("Process: %i started\n", pid);
     }
-
-    error = connect_handle(cfd);
 
     return error;
 }
