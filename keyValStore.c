@@ -1,4 +1,3 @@
-#include <sys/sem.h>
 #include "keyValStore.h"
 
 Storage* storage = NULL;

@@ -5,7 +5,7 @@
 #define VALUESIZE 200
 #define STORAGECAPACITY 2
 
-#include "string.h"
+#include <string.h>
 
 typedef struct Key_Value {
     char key[KEYSIZE];

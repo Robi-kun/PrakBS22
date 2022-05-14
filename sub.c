@@ -1,10 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include "unistd.h"
-#include <string.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/shm.h>
 #include "sub.h"
 
 typedef enum Command {
@@ -47,7 +40,7 @@ int sonderzeichen(char *string){
  * -1: Can't receive massage from client
  * 1: Client ended session
  */
-int connect_handle(int connectionFd) {
+int connect_handle(int connectionFd, Sem_Config storageSem) {
     char in[BUFFSIZE], out[BUFFSIZE];
 
     while(1) {
@@ -79,10 +72,13 @@ int connect_handle(int connectionFd) {
 
                     strcpy(out, "PUT :");
                     strcat(out, key);
+                    semop(storageSem.ID, &storageSem.down, 1);
                     if (put(key, value) > -1) {
+                        semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":");
                         strcat(out, value);
                     } else {
+                        semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":no_space_for_new_key");
                     }
                 }
@@ -99,11 +95,14 @@ int connect_handle(int connectionFd) {
 
                     strcpy(out, "GET :");
                     strcat(out, key);
+                    semop(storageSem.ID, &storageSem.down, 1);
                     if (get(key, value) == 1) {
+                        semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":");
                         strcat(out, value);
                         puts(value);
                     } else {
+                        semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":key_nonexistent");
                     }
                 }
@@ -117,9 +116,12 @@ int connect_handle(int connectionFd) {
                 else{
                     strcpy(out, "DEL :");
                     strcat(out, key);
+                    semop(storageSem.ID, &storageSem.down, 1);
                     if (del(key) == 1) {
+                        semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":key_deleted");
                     } else {
+                        semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":key_nonexistent");
                     }
                 }
@@ -144,7 +146,7 @@ int connect_handle(int connectionFd) {
     }
 }
 
-int spawn_process(int cfd, int storageID) {
+int spawn_process(int cfd, int storageID, Sem_Config storageSem) {
     int pid = fork();
     if(pid == 0) {
         void* shmMem = shmat(storageID, NULL, 0);
@@ -155,7 +157,7 @@ int spawn_process(int cfd, int storageID) {
         Storage* storage = (Storage *) shmMem;
         storage_set(storage);
 
-        connect_handle(cfd);
+        connect_handle(cfd, storageSem);
 
         storage_unset();
         shmdt(storage);
@@ -168,7 +170,7 @@ int spawn_process(int cfd, int storageID) {
     return 0;
 }
 
-void run(int serverFd, int storageID) {
+void run(int serverFd, int storageID, Sem_Config storageSem) {
     struct sockaddr_in client; // Socket Adresse eines Clients
     socklen_t client_len = sizeof(client); // Länge der Client-Daten
 
@@ -179,6 +181,6 @@ void run(int serverFd, int storageID) {
             perror("Can't accept connection");
             exit(EXIT_FAILURE);
         }
-        spawn_process(cfd, storageID);
+        spawn_process(cfd, storageID, storageSem);
     }
 }
