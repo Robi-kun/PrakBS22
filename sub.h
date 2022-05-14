@@ -5,17 +5,17 @@
 #ifndef PRAKBS22_SUB_H
 #define PRAKBS22_SUB_H
 
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include "main.h"
+
+#include "keyValStore.h"
+
+
+#define BUFFSIZE 1024 // Größe des Buffers
 
 /*
  * Handels application logic
  * RETURN:
  * 0: No Errors
  */
-int run();
+void run(int serv_fd);
 
 #endif //PRAKBS22_SUB_H

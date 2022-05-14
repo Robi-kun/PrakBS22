@@ -1,11 +1,15 @@
-#include "main.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include "sub.h"
 
-#define ENDLOSSCHLEIFE 1
-#define STRINGSIZE 100
+#define PORT 5678
+
+Storage store;
 
 int main() {
-
-    arrayEinrichten();
 
     int rfd; // Rendevouz-Descriptor
 
@@ -40,6 +44,8 @@ int main() {
         fprintf(stderr, "socket konnte nicht listen gesetzt werden\n");
         exit(-1);
     }
+
+    storage_init(&store);
 
     run(rfd);
 

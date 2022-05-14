@@ -1,3 +1,9 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "unistd.h"
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include "sub.h"
 
 typedef enum Command {
@@ -72,7 +78,7 @@ int connect_handle(int conn_fd) {
 
                     strcpy(out, "PUT :");
                     strcat(out, key);
-                    if (put(key, value) != 0) {
+                    if (put(key, value) > -1) {
                         strcat(out, ":");
                         strcat(out, value);
                     } else {
@@ -148,10 +154,9 @@ int spawn_process(int cfd) {
     return 0;
 }
 
-int run(int serv_fd) {
-    struct sockaddr_in client; // Socketadresse eines Clients
-    socklen_t client_len; // Länge der Client-Daten
-    int error = 0;
+void run(int serv_fd) {
+    struct sockaddr_in client; // Socket Adresse eines Clients
+    socklen_t client_len = sizeof(client); // Länge der Client-Daten
 
     // Verbindung eines Clients wird entgegengenommen
     while(1) {
@@ -162,6 +167,4 @@ int run(int serv_fd) {
         }
         spawn_process(cfd);
     }
-
-    return error;
 }
