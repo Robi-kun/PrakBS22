@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/shm.h>
 #include "sub.h"
 
 typedef enum Command {
@@ -46,7 +47,7 @@ int sonderzeichen(char *string){
  * -1: Can't receive massage from client
  * 1: Client ended session
  */
-int connect_handle(int conn_fd) {
+int connect_handle(int connectionFd) {
     char in[BUFFSIZE], out[BUFFSIZE];
 
     while(1) {
@@ -54,7 +55,7 @@ int connect_handle(int conn_fd) {
         bzero(out, BUFFSIZE);
 
         // Receive Command from client
-        if(recv(conn_fd, in , BUFFSIZE, 0) == -1) {
+        if(recv(connectionFd, in , BUFFSIZE, 0) == -1) {
             perror("ERROR: Can't receive massage from client");
             return -1;
         }
@@ -125,7 +126,8 @@ int connect_handle(int conn_fd) {
                 break;
             };
             case QUIT: {
-                shutdown(conn_fd, SHUT_RDWR);
+                shutdown(connectionFd, SHUT_RDWR);
+                close(connectionFd);
                 return 1;
             };
             case FALSE: {
@@ -138,33 +140,45 @@ int connect_handle(int conn_fd) {
         // New line after output
         strcat(out, "\n");
 
-        send(conn_fd, out, BUFFSIZE, 0);
+        send(connectionFd, out, BUFFSIZE, 0);
     }
 }
 
-int spawn_process(int cfd) {
+int spawn_process(int cfd, int storageID) {
     int pid = fork();
     if(pid == 0) {
+        void* shmMem = shmat(storageID, NULL, 0);
+        if(shmMem == (void *) 1) {
+            perror("Can't attach shared storage to child process");
+            exit(EXIT_FAILURE);
+        }
+        Storage* storage = (Storage *) shmMem;
+        storage_set(storage);
+
         connect_handle(cfd);
+
+        storage_unset();
+        shmdt(storage);
+
         puts("Prozess beendet");
-        exit(0);
+        exit(EXIT_SUCCESS);
     }
     printf("Process: %i started\n", pid);
 
     return 0;
 }
 
-void run(int serv_fd) {
+void run(int serverFd, int storageID) {
     struct sockaddr_in client; // Socket Adresse eines Clients
     socklen_t client_len = sizeof(client); // Länge der Client-Daten
 
     // Verbindung eines Clients wird entgegengenommen
     while(1) {
-        int cfd = accept(serv_fd, (struct sockaddr *) &client, &client_len);
+        int cfd = accept(serverFd, (struct sockaddr *) &client, &client_len);
         if(cfd == -1) {
             perror("Can't accept connection");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
-        spawn_process(cfd);
+        spawn_process(cfd, storageID);
     }
 }

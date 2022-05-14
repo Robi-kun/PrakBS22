@@ -3,11 +3,11 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
 #include "sub.h"
 
 #define PORT 5678
-
-Storage store;
 
 int main() {
 
@@ -17,7 +17,7 @@ int main() {
     rfd = socket(AF_INET, SOCK_STREAM, 0);
     if (rfd < 0 ){
         fprintf(stderr, "socket konnte nicht erstellt werden\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
 
@@ -34,7 +34,7 @@ int main() {
     int brt = bind(rfd, (struct sockaddr *) &server, sizeof(server));
     if (brt < 0 ){
         fprintf(stderr, "socket konnte nicht gebunden werden\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
 
@@ -42,14 +42,41 @@ int main() {
     int lrt = listen(rfd, 5);
     if (lrt < 0 ){
         fprintf(stderr, "socket konnte nicht listen gesetzt werden\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
-    storage_init(&store);
+    int storageID = shmget(IPC_PRIVATE, sizeof(Storage), IPC_CREAT | 600);
+    if(storageID < 0) {
+        perror("Can't create shared storage");
+        exit(EXIT_FAILURE);
+    }
+    void* shmMem = shmat(storageID, NULL, 0);
+    if (shmctl(storageID, IPC_RMID, NULL) < 0) {
+        perror("Can't mark shared storage for auto remove");
+        exit(EXIT_FAILURE);
+    }
+    if (shmctl(storageID, SHM_UNLOCK, NULL) < 0) {
+        perror("Can't mark shared storage for auto swap out by process ending");
+        exit(EXIT_FAILURE);
+    }
+    if (shmMem == (void *) 1) {
+        perror("Can't attache shared storage");
+        exit(EXIT_FAILURE);
+    }
+    Storage* storage = (Storage *) shmMem;
+    storage_init(storage);
 
-    run(rfd);
+    int storageSemID = semget(IPC_PRIVATE, 1, IPC_CREAT | 600);
+    if (storageSemID < 0) {
+        perror("Can't create semaphore for shared storage");
+        exit(EXIT_FAILURE);
+    }
+
+
+    run(rfd, storageID);
 
     // Rendevouz Descriptor schließen
     shutdown(rfd, SHUT_RDWR);
+    close(rfd);
 
 }

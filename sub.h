@@ -16,6 +16,6 @@
  * RETURN:
  * 0: No Errors
  */
-void run(int serv_fd);
+void run(int serverFd, int storageID);
 
 #endif //PRAKBS22_SUB_H

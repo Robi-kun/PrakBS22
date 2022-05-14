@@ -1,3 +1,4 @@
+#include <sys/sem.h>
 #include "keyValStore.h"
 
 Storage* storage = NULL;
@@ -6,6 +7,7 @@ void storage_init(Storage* set_storage) {
     storage_set(set_storage);
     storage->len = 0;
     storage->capacity = STORAGECAPACITY;
+    storage_unset();
 }
 
 void storage_set(Storage* set_storage) {
