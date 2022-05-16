@@ -1,31 +1,16 @@
-#include "main.h"
+#include "sub.h"
 
-#define BUFSIZE 1024 // Größe des Buffers
-#define TRUE 1
-#define ENDLOSSCHLEIFE 1
-//#define PORT 4711
 #define PORT 5678
-#define STRINGSIZE 100
-
 
 int main() {
 
-    arrayEinrichten();
-
     int rfd; // Rendevouz-Descriptor
-    int cfd; // Verbindungs-Descriptor
-
-    struct sockaddr_in client; // Socketadresse eines Clients
-    socklen_t client_len; // Länge der Client-Daten
-    char in[BUFSIZE]; // Daten vom Client an den Server
-    int bytes_read; // Anzahl der Bytes, die der Client geschickt hat
-
 
     // Socket erstellen
     rfd = socket(AF_INET, SOCK_STREAM, 0);
     if (rfd < 0 ){
         fprintf(stderr, "socket konnte nicht erstellt werden\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
 
@@ -42,7 +27,7 @@ int main() {
     int brt = bind(rfd, (struct sockaddr *) &server, sizeof(server));
     if (brt < 0 ){
         fprintf(stderr, "socket konnte nicht gebunden werden\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
 
@@ -50,111 +35,61 @@ int main() {
     int lrt = listen(rfd, 5);
     if (lrt < 0 ){
         fprintf(stderr, "socket konnte nicht listen gesetzt werden\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
-    while (ENDLOSSCHLEIFE) {
+    int storageID = shmget(IPC_PRIVATE, sizeof(Storage), IPC_CREAT | 0600);
+    if(storageID < 0) {
+        perror("Can't create shared storage");
+        exit(EXIT_FAILURE);
+    }
+    printf("Shared storage ID: %i\n", storageID);
+    void* shmMem = shmat(storageID, NULL, 0);
+    if (shmctl(storageID, IPC_RMID, NULL) < 0) {
+        perror("Can't mark shared storage for auto remove");
+        exit(EXIT_FAILURE);
+    }
+    if (shmctl(storageID, SHM_UNLOCK, NULL) < 0) {
+        perror("Can't mark shared storage for auto swap out by process ending");
+        exit(EXIT_FAILURE);
+    }
+    if (shmMem == (void *) 1) {
+        perror("Can't attache shared storage");
+        exit(EXIT_FAILURE);
+    }
+    Storage* storage = (Storage *) shmMem;
 
-        // Verbindung eines Clients wird entgegengenommen
-        cfd = accept(rfd, (struct sockaddr *) &client, &client_len);
+    Sem_Config storageSem;
+    storageSem.ID = semget(IPC_PRIVATE, 1, IPC_CREAT | 0600);
+    if (storageSem.ID < 0) {
+        perror("Can't create semaphore for shared storage");
+        exit(EXIT_FAILURE);
+    }
+    unsigned short storageSemValues[1];
+    storageSemValues[0] = 1;
+    if(semctl(storageSem.ID, 1, SETALL, storageSemValues) < 0) {
+        perror("Can't initialize semaphore");
+        semctl(storageSem.ID, IPC_RMID, NULL);
+        exit(EXIT_FAILURE);
+    }
+    printf("Storage semaphore ID: %i\n", storageSem.ID);
+    storageSem.up.sem_num = storageSem.down.sem_num = 0;
+    storageSem.up.sem_flg = storageSem.down.sem_flg = SEM_UNDO;
+    storageSem.up.sem_op = 1;
+    storageSem.down.sem_op = -1;
 
-        // Lesen von Daten, die der Client schickt
-        bytes_read = read(cfd, in, BUFSIZE);
+    storage_init(storage);
 
+    run(rfd, storageID, storageSem);
 
-        // Zurückschicken der Daten, solange der Client welche schickt (und kein Fehler passiert)
-        while (bytes_read > 0) {
-            printf("sending back the %d bytes I received...\n", bytes_read);
-
-
-            //Interpretation
-            int a;
-            char x[STRINGSIZE];
-            if(strncmp(in, "PUT ",4) == 0) {
-                char *ptr = strtok(in, " ");
-                char *keyptr = strtok(NULL, " ");
-                char *valptr = strtok(NULL, "\r");
-                if(keyptr == NULL || valptr == NULL) {
-                    write(cfd, "command_nonexistent\n", 20);
-                }
-                else if(sonderzeichen(keyptr) == 0 || sonderzeichen(valptr) == 0){
-                    write(cfd,"special_characters_not_allowed\n",31);
-                }
-                else {
-                    printf("Key: %s\n", keyptr);
-                    printf("Value: %s\n", valptr);
-
-                    a = put(keyptr, valptr);
-
-                    char y[STRINGSIZE+STRINGSIZE+10] = "PUT :";
-                    strcat(y, keyptr);
-                    if (a == 1 || a == -1) {
-                        strcat(y, ":");
-                        strcat(y, valptr);
-                        strcat(y, "\n");
-                    } else {
-                        strcat(y, ":no_space_for_new_key\n");
-                    }
-                    write(cfd, y, strlen(y));
-                }
-            }
-
-            else if(strncmp(in, "GET ",4) == 0) {
-                char *ptr = strtok(in, " ");
-                char *keyptr = strtok(NULL, "\r");
-
-                if(keyptr == NULL) {
-                    write(cfd, "command_nonexistent\n", 20);
-                }
-                else {
-                    a = get(keyptr, x);
-
-                    char y[STRINGSIZE+STRINGSIZE+10] = "GET :";
-                    strcat(y, keyptr);
-                    if (a == 1) {
-                        strcat(y, ":");
-                        strcat(y, x);
-                        strcat(y, "\n");
-                    } else {
-                        strcat(y, ":key_nonexistent\n");
-                    }
-                    write(cfd, y, strlen(y));
-                }
-            }
-
-            else if(strncmp(in, "DEL ",4) == 0){
-                char *ptr = strtok(in, " ");
-                char *keyptr = strtok(NULL, "\r");
-                if(keyptr == NULL) {
-                    write(cfd, "command_nonexistent\n", 20);
-                }
-                else{
-                    a = del(keyptr);
-
-                    char y[STRINGSIZE+50] = "DEL :";
-                    strcat(y, keyptr);
-                    if (a == 1) {
-                        strcat(y, ":key_deleted\n");
-                    } else {
-                        strcat(y, ":key_nonexistent\n");
-                    }
-                    write(cfd, y, strlen(y));
-                }
-            }
-            else if(strncmp(in, "QUIT\r",5) == 0)
-                close(cfd);
-
-            else
-                write(cfd,"command_nonexistent\n",20);
-            //Interpretation Ende
-
-
-            bytes_read = read(cfd, in, BUFSIZE);
-        }
-        close(cfd);
+    shmdt(storage);
+    if (semctl(storageSem.ID, 1, IPC_RMID) < 0) {
+        perror("Can't remove the storage semaphore");
+        exit(EXIT_FAILURE);
     }
 
     // Rendevouz Descriptor schließen
+    shutdown(rfd, SHUT_RDWR);
     close(rfd);
 
 }

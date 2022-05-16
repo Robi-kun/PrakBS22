@@ -1,58 +1,68 @@
 #include "keyValStore.h"
 
-#define STRINGSIZE 100
-#define KEYLISTSIZE 100
+Storage* storage = NULL;
 
-typedef struct keys_{
-    char keyname[STRINGSIZE];
-    char value[STRINGSIZE];
-}keys;
-
-keys keyArray[KEYLISTSIZE];
-
-
-void arrayEinrichten(){
-    for(int i = 0; i < KEYLISTSIZE; i++)
-        keyArray[i].keyname[0] = '\0';
+void storage_init(Storage* set_storage) {
+    storage_set(set_storage);
+    storage->len = 0;
+    storage->capacity = STORAGECAPACITY;
+    storage_unset();
 }
 
-int put(char* key, char* value){
-    for(int i = 0; i < KEYLISTSIZE; i++)
-        if (strcmp(key, keyArray[i].keyname) == 0) {          //key schon vorhanden
-            char temp[STRINGSIZE];
-            strncpy(temp, keyArray[i].value, STRINGSIZE);
-            strncpy(keyArray[i].value, value, STRINGSIZE);
-            keyArray[i].value[STRINGSIZE - 1] = '\0';
-            strncpy(value, temp, STRINGSIZE);
-            return -1;
+void storage_set(Storage* set_storage) {
+    storage = set_storage;
+}
+
+void storage_unset() {
+    storage = NULL;
+}
+
+int put(char* key, char* value) {
+    if(storage->len == storage->capacity)
+        return -1;
+
+    for(unsigned int i = 0; i < storage->len; i++) {
+        if (strcmp(key, storage->data[i].key) == 0) {          //key schon vorhanden
+            strncpy(storage->data[i].value, value, VALUESIZE);
+            return 0;
         }
-    for(int i = 0; i < KEYLISTSIZE; i++)
-        if(keyArray[i].keyname[0] == '\0'){         //sucht freies Key-Feld
-            strncpy(keyArray[i].keyname,key,STRINGSIZE);
-            strncpy(keyArray[i].value,value,STRINGSIZE);
-            keyArray[i].keyname[STRINGSIZE-1] = '\0';
-            keyArray[i].value[STRINGSIZE-1] = '\0';
-            strncpy(key,keyArray[i].keyname,STRINGSIZE);
-            strncpy(value,keyArray[i].value,STRINGSIZE);
-            return 1;
-        }
-    return 0;
+    }
+
+    unsigned int i = storage->len++;
+    strncpy(storage->data[i].key, key, KEYSIZE);
+    strncpy(storage->data[i].value, value, VALUESIZE);
+
+    return 1;
 }
 
 int get(char* key, char* res){
-    for(int i = 0; i < KEYLISTSIZE; i++)
-        if(strcmp(key, keyArray[i].keyname) == 0) {
-            strncpy(res,keyArray[i].value,STRINGSIZE);
+    for(int i = 0; i < storage->len; i++)
+        if(strcmp(key, storage->data[i].key) == 0) {
+            strncpy(res,storage->data[i].value,VALUESIZE);
+
             return 1;
         }
+
     return 0;
 }
 
 int del(char* key){
-    for(int i = 0; i < KEYLISTSIZE; i++)
-        if (strcmp(key, keyArray[i].keyname) == 0) {
-            keyArray[i].keyname[0] = '\0';
+    for(int i = 0; i < storage->len; i++)
+        if (strcmp(key, storage->data[i].key) == 0) {
+            storage->data[i].key[0] = '\0';
+            storage->len--;
+
+            while (storage->data[i+1].key[0] != '\0') {
+                if(i == storage->capacity) {
+                    break;
+                }
+                strcpy(storage->data[i].key, storage->data[i+1].key);
+                storage->data[i+1].key[0] = '\0';
+                strcpy(storage->data[i].value, storage->data[i+1].value);
+            }
+
             return 1;
         }
+
     return 0;
 }
