@@ -1,5 +1,6 @@
 #include <signal.h>
 #include "sub.h"
+#include "connections.h"
 
 typedef enum Command {
     PUT,
@@ -165,60 +166,6 @@ void new_process(int cfd, int storageId, Sem_Config storageSem) {
     exit(EXIT_SUCCESS);
 }
 
-typedef struct Connection {
-    int pid;
-    int cfd;
-} Connection;
-
-void connection_init(Connection* this, int pid, int cfd) {
-    this->pid = pid;
-    this->cfd = cfd;
-}
-
-void connection_copy(Connection* dest, Connection* src) {
-    dest->pid = src->pid;
-    dest->cfd = src->cfd;
-}
-
-Connection connection_new(int pid, int fd) {
-    Connection connection;
-
-    connection_init(&connection, pid, fd);
-
-    return connection;
-}
-
-typedef struct Connections {
-    unsigned int cap;
-    unsigned int len;
-    Connection* list;
-} Connections;
-
-void connections_init(Connections* this, int cap) {
-    this->cap = cap;
-    this->len = 0;
-    this->list = calloc(cap, sizeof(Connection));
-}
-
-Connections connections_new(int cap) {
-    Connections connections;
-
-    connections_init(&connections, cap);
-
-    return connections;
-}
-
-void connections_delete(Connections* this) {
-    free(this->list);
-}
-
-void connections_push(Connections* this, Connection new) {
-    unsigned int i = this->len;
-
-    connection_copy(&this->list[i], &new);
-    this->len++;
-}
-
 Connections connections;
 
 void term_connection_controlling(int signal) {
@@ -235,8 +182,9 @@ void term_connection_controlling(int signal) {
 
         kill(SIGTERM, pid);
 
-        printf("Terminated process %i and closed socket %i", pid, cfd);
+        printf("Terminated process %i and closed socket %i\n", pid, cfd);
     }
+    connections_delete(&connections);
 
     exit(0);
 }
@@ -263,6 +211,7 @@ void connection_controlling(Config* config) {
 
     struct sigaction sigterm;
     sigterm.sa_handler = term_connection_controlling;
+    sigterm.sa_flags = 0;
     sigaction(SIGTERM, &sigterm, NULL);
 
     struct sigaction childFinished;
@@ -296,7 +245,7 @@ void connection_controlling(Config* config) {
 }
 
 void run(Config* config) {
-    char* in;
+    char in[8];
 
     int connection_controller = fork();
 
@@ -305,7 +254,7 @@ void run(Config* config) {
     else {
         while(1) {
             scanf("%s", in);
-            if(strncmp(in, "shutdown", 8) == 0)
+            if(strcmp(in, "shutdown") == 0)
                 break;
         }
 
