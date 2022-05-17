@@ -80,7 +80,12 @@ int main() {
 
     storage_init(storage);
 
-    run(rfd, storageID, storageSem);
+    Config config;
+    config.serverFd = rfd;
+    config.storageId = storageID;
+    config.storageSem = storageSem;
+
+    run(&config);
 
     shmdt(storage);
     if (semctl(storageSem.ID, 1, IPC_RMID) < 0) {

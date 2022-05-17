@@ -170,17 +170,17 @@ int spawn_process(int cfd, int storageID, Sem_Config storageSem) {
     return 0;
 }
 
-void run(int serverFd, int storageID, Sem_Config storageSem) {
+void run(Config* config) {
     struct sockaddr_in client; // Socket Adresse eines Clients
     socklen_t client_len = sizeof(client); // Länge der Client-Daten
 
     // Verbindung eines Clients wird entgegengenommen
     while(1) {
-        int cfd = accept(serverFd, (struct sockaddr *) &client, &client_len);
+        int cfd = accept(config->serverFd, (struct sockaddr *) &client, &client_len);
         if(cfd == -1) {
             perror("Can't accept connection");
             exit(EXIT_FAILURE);
         }
-        spawn_process(cfd, storageID, storageSem);
+        spawn_process(cfd, config->storageId, config->storageSem);
     }
 }

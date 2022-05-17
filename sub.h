@@ -24,11 +24,17 @@ typedef struct Sem_Config {
     struct sembuf down;
 } Sem_Config;
 
+typedef struct Config {
+    int serverFd;
+    int storageId;
+    Sem_Config storageSem;
+} Config;
+
 /*
  * Handels application logic
  * RETURN:
  * 0: No Errors
  */
-void run(int serverFd, int storageID, Sem_Config storageSem);
+void run(Config* config);
 
 #endif //PRAKBS22_SUB_H
