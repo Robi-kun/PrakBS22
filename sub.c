@@ -1,3 +1,4 @@
+#include <signal.h>
 #include "sub.h"
 
 typedef enum Command {
@@ -146,41 +147,170 @@ int connect_handle(int connectionFd, Sem_Config storageSem) {
     }
 }
 
-int spawn_process(int cfd, int storageID, Sem_Config storageSem) {
-    int pid = fork();
-    if(pid == 0) {
-        void* shmMem = shmat(storageID, NULL, 0);
-        if(shmMem == (void *) 1) {
-            perror("Can't attach shared storage to child process");
-            exit(EXIT_FAILURE);
-        }
-        Storage* storage = (Storage *) shmMem;
-        storage_set(storage);
-
-        connect_handle(cfd, storageSem);
-
-        storage_unset();
-        shmdt(storage);
-
-        puts("Prozess beendet");
-        exit(EXIT_SUCCESS);
+void new_process(int cfd, int storageId, Sem_Config storageSem) {
+    void* shmMem = shmat(storageId, NULL, 0);
+    if(shmMem == (void *) 1) {
+        perror("Can't attach shared storage to child process");
+        exit(EXIT_FAILURE);
     }
-    printf("Process: %i started\n", pid);
+    Storage* storage = (Storage *) shmMem;
+    storage_set(storage);
 
-    return 0;
+    connect_handle(cfd, storageSem);
+
+    storage_unset();
+    shmdt(storage);
+
+    puts("Prozess beendet");
+    exit(EXIT_SUCCESS);
+}
+
+typedef struct Connection {
+    int pid;
+    int cfd;
+} Connection;
+
+void connection_init(Connection* this, int pid, int cfd) {
+    this->pid = pid;
+    this->cfd = cfd;
+}
+
+void connection_copy(Connection* dest, Connection* src) {
+    dest->pid = src->pid;
+    dest->cfd = src->cfd;
+}
+
+Connection connection_new(int pid, int fd) {
+    Connection connection;
+
+    connection_init(&connection, pid, fd);
+
+    return connection;
+}
+
+typedef struct Connections {
+    unsigned int cap;
+    unsigned int len;
+    Connection* list;
+} Connections;
+
+void connections_init(Connections* this, int cap) {
+    this->cap = cap;
+    this->len = 0;
+    this->list = calloc(cap, sizeof(Connection));
+}
+
+Connections connections_new(int cap) {
+    Connections connections;
+
+    connections_init(&connections, cap);
+
+    return connections;
+}
+
+void connections_delete(Connections* this) {
+    free(this->list);
+}
+
+void connections_push(Connections* this, Connection new) {
+    unsigned int i = this->len;
+
+    connection_copy(&this->list[i], &new);
+    this->len++;
+}
+
+Connections connections;
+
+void term_connection_controlling(int signal) {
+    char* massage = "Server shutdown\n";
+    int cfd;
+    int pid;
+
+    for (int i = 0; i < connections.len; i++) {
+        cfd = connections.list[i].cfd;
+        pid = connections.list[i].pid;
+        send(cfd, massage, strlen(massage), 0);
+        shutdown(cfd, SHUT_RDWR);
+        close(cfd);
+
+        kill(SIGTERM, pid);
+
+        printf("Terminated process %i and closed socket %i", pid, cfd);
+    }
+
+    exit(0);
+}
+
+void child_finished(int signal, siginfo_t* info, void* context) {
+    for (int i = 0; i < connections.len; i++) {
+        if(connections.list[i].pid == info->si_pid) {
+            while(i < connections.len) {
+                connections.list[i].pid = connections.list[i+1].pid;
+                connections.list[i].cfd = connections.list[i+1].cfd;
+                i++;
+            }
+            connections.len--;
+
+            return;
+        }
+    }
+}
+
+void connection_controlling(Config* config) {
+    struct sockaddr_in client; // Socket Adresse eines Clients
+    socklen_t client_len = sizeof(client); // Länge der Client-Daten
+    connections = connections_new(2);
+
+    struct sigaction sigterm;
+    sigterm.sa_handler = term_connection_controlling;
+    sigaction(SIGTERM, &sigterm, NULL);
+
+    struct sigaction childFinished;
+    childFinished.sa_flags = SA_NOCLDWAIT | SA_SIGINFO | SA_NOCLDSTOP;
+    childFinished.sa_sigaction = child_finished;
+    sigaction(SIGCHLD, &childFinished, NULL);
+
+
+    // Verbindung eines Clients wird entgegengenommen
+    while (1) {
+        int cfd = accept(config->serverFd, (struct sockaddr *) &client, &client_len);
+        if (cfd == -1) {
+            continue;
+        }
+
+        if(connections.len < connections.cap) {
+            int pid = fork();
+            if(pid == 0)
+                new_process(cfd, config->storageId, config->storageSem);
+            else {
+                connections_push(&connections, connection_new(pid, cfd));
+            }
+        }
+        else {
+            char* massage = "No place for new connection\n";
+            send(cfd, massage, strlen(massage), 0);
+            shutdown(cfd, SHUT_RDWR);
+            close(cfd);
+        }
+    }
 }
 
 void run(Config* config) {
-    struct sockaddr_in client; // Socket Adresse eines Clients
-    socklen_t client_len = sizeof(client); // Länge der Client-Daten
+    char* in;
 
-    // Verbindung eines Clients wird entgegengenommen
-    while(1) {
-        int cfd = accept(config->serverFd, (struct sockaddr *) &client, &client_len);
-        if(cfd == -1) {
-            perror("Can't accept connection");
-            exit(EXIT_FAILURE);
+    int connection_controller = fork();
+
+    if(connection_controller == 0)
+        connection_controlling(config);
+    else {
+        while(1) {
+            scanf("%s", in);
+            if(strncmp(in, "shutdown", 8) == 0)
+                break;
         }
-        spawn_process(cfd, config->storageId, config->storageSem);
+
+        kill(connection_controller, SIGTERM);
+
+        return;
     }
 }

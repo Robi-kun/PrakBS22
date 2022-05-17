@@ -92,6 +92,7 @@ int main() {
         perror("Can't remove the storage semaphore");
         exit(EXIT_FAILURE);
     }
+    printf("Removed storage semaphore group with ID: %i", storageSem.ID);
 
     // Rendevouz Descriptor schließen
     shutdown(rfd, SHUT_RDWR);

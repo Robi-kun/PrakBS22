@@ -30,6 +30,7 @@ typedef struct Config {
     Sem_Config storageSem;
 } Config;
 
+
 /*
  * Handels application logic
  * RETURN:
