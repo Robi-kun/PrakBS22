@@ -207,6 +207,7 @@ void child_finished(int signal, siginfo_t* info, void* context) {
 void connection_controlling(Config* config) {
     struct sockaddr_in client; // Socket Adresse eines Clients
     socklen_t client_len = sizeof(client); // Länge der Client-Daten
+    sigset_t set;
     connections = connections_new(2);
 
     struct sigaction sigterm;
@@ -215,15 +216,19 @@ void connection_controlling(Config* config) {
     sigaction(SIGTERM, &sigterm, NULL);
 
     struct sigaction childFinished;
-    childFinished.sa_flags = SA_NOCLDWAIT | SA_SIGINFO | SA_NOCLDSTOP;
+    childFinished.sa_flags = SA_NOCLDWAIT | SA_SIGINFO | SA_NOCLDSTOP | SA_RESTART;
     childFinished.sa_sigaction = child_finished;
     sigaction(SIGCHLD, &childFinished, NULL);
 
+    sigaddset(&set, SIGCHLD);
+    sigaddset(&set, SIGTERM);
 
     // Verbindung eines Clients wird entgegengenommen
     while (1) {
+
         int cfd = accept(config->serverFd, (struct sockaddr *) &client, &client_len);
         if (cfd == -1) {
+            perror("Can't accept client");
             continue;
         }
 
@@ -232,7 +237,9 @@ void connection_controlling(Config* config) {
             if(pid == 0)
                 new_process(cfd, config->storageId, config->storageSem);
             else {
+                sigprocmask(SIG_BLOCK, &set, NULL);
                 connections_push(&connections, connection_new(pid, cfd));
+                sigprocmask(SIG_UNBLOCK, &set, NULL);
             }
         }
         else {
