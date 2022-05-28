@@ -7,6 +7,8 @@ typedef enum Command {
     GET,
     DEL,
     QUIT,
+    BEG,
+    END,
     FALSE
 } Command;
 
@@ -20,6 +22,10 @@ Command interpret(char* command) {
         return DEL;
     if(strncmp(command, "QUIT", 4) == 0)
         return QUIT;
+    if(strncmp(command, "BEG", 3) == 0)
+        return BEG;
+    if(strncmp(command, "END", 3) == 0)
+        return END;
 
     return FALSE;
 }
@@ -45,6 +51,7 @@ int sonderzeichen(char *string){
 int connect_handle(int connectionFd, Sem_Config storageSem) {
     char in[BUFFSIZE], out[BUFFSIZE];
 
+    int transaction = 0;
     while(1) {
         bzero(in, BUFFSIZE);
         bzero(out, BUFFSIZE);
@@ -74,13 +81,16 @@ int connect_handle(int connectionFd, Sem_Config storageSem) {
 
                     strcpy(out, "PUT :");
                     strcat(out, key);
-                    semop(storageSem.ID, &storageSem.down, 1);
+                    if(transaction == 0)
+                        semop(storageSem.ID, &storageSem.down, 1);
                     if (put(key, value) > -1) {
-                        semop(storageSem.ID, &storageSem.up, 1);
+                        if(transaction == 0)
+                            semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":");
                         strcat(out, value);
                     } else {
-                        semop(storageSem.ID, &storageSem.up, 1);
+                        if(transaction == 0)
+                            semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":no_space_for_new_key");
                     }
                 }
@@ -97,14 +107,17 @@ int connect_handle(int connectionFd, Sem_Config storageSem) {
 
                     strcpy(out, "GET :");
                     strcat(out, key);
-                    semop(storageSem.ID, &storageSem.down, 1);
+                    if(transaction == 0)
+                        semop(storageSem.ID, &storageSem.down, 1);
                     if (get(key, value) == 1) {
-                        semop(storageSem.ID, &storageSem.up, 1);
+                        if(transaction == 0)
+                            semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":");
                         strcat(out, value);
                         puts(value);
                     } else {
-                        semop(storageSem.ID, &storageSem.up, 1);
+                        if(transaction == 0)
+                            semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":key_nonexistent");
                     }
                 }
@@ -118,18 +131,43 @@ int connect_handle(int connectionFd, Sem_Config storageSem) {
                 else{
                     strcpy(out, "DEL :");
                     strcat(out, key);
-                    semop(storageSem.ID, &storageSem.down, 1);
+                    if(transaction == 0)
+                        semop(storageSem.ID, &storageSem.down, 1);
                     if (del(key) == 1) {
-                        semop(storageSem.ID, &storageSem.up, 1);
+                        if(transaction == 0)
+                            semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":key_deleted");
                     } else {
-                        semop(storageSem.ID, &storageSem.up, 1);
+                        if(transaction == 0)
+                            semop(storageSem.ID, &storageSem.up, 1);
                         strcat(out, ":key_nonexistent");
                     }
                 }
                 break;
             };
+            case BEG: {
+                if(transaction == 0) {
+                    semop(storageSem.ID, &storageSem.down, 1);
+                    transaction = 1;
+                    strcat(out, "transaction_started");
+                }
+                else
+                    strcat(out, "transaction_already_in_progress");
+                break;
+            }
+            case END: {
+                if(transaction == 1) {
+                    transaction = 0;
+                    semop(storageSem.ID, &storageSem.up, 1);
+                    strcat(out, "transaction_stopped");
+                }
+                else
+                    strcat(out, "no_transaction_in_progress");
+                break;
+            }
             case QUIT: {
+                if(transaction == 1)
+                    semop(storageSem.ID, &storageSem.up, 1);
                 shutdown(connectionFd, SHUT_RDWR);
                 close(connectionFd);
                 return 1;

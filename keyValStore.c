@@ -18,8 +18,6 @@ void storage_unset() {
 }
 
 int put(char* key, char* value) {
-    if(storage->len == storage->capacity)
-        return -1;
 
     for(unsigned int i = 0; i < storage->len; i++) {
         if (strcmp(key, storage->data[i].key) == 0) {          //key schon vorhanden
@@ -27,6 +25,9 @@ int put(char* key, char* value) {
             return 0;
         }
     }
+
+    if(storage->len == storage->capacity)
+        return -1;
 
     unsigned int i = storage->len++;
     strncpy(storage->data[i].key, key, KEYSIZE);
