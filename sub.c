@@ -166,8 +166,6 @@ int connect_handle(int connectionFd, Sem_Config storageSem) {
                 break;
             }
             case QUIT: {
-                if(transaction == 1)
-                    semop(storageSem.ID, &storageSem.up, 1);
                 shutdown(connectionFd, SHUT_RDWR);
                 close(connectionFd);
                 return 1;
