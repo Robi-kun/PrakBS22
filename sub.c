@@ -224,16 +224,17 @@ void connection_controlling(Config* config) {
     sigaddset(&set, SIGTERM);
 
     // Verbindung eines Clients wird entgegengenommen
+    int pid, cfd = -1;
     while (1) {
 
-        int cfd = accept(config->serverFd, (struct sockaddr *) &client, &client_len);
+        cfd = accept(config->serverFd, (struct sockaddr *) &client, &client_len);
         if (cfd == -1) {
             perror("Can't accept client");
             continue;
         }
 
         if(connections.len < connections.cap) {
-            int pid = fork();
+            pid = fork();
             if(pid == 0)
                 new_process(cfd, config->storageId, config->storageSem);
             else {
