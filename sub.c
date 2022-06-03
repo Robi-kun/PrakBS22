@@ -9,6 +9,7 @@ typedef enum Command {
     QUIT,
     BEG,
     END,
+    SUB,
     FALSE
 } Command;
 
@@ -26,6 +27,8 @@ Command interpret(char* command) {
         return BEG;
     if(strncmp(command, "END", 3) == 0)
         return END;
+    if(strncmp(command, "SUB", 3) == 0)
+        return SUB;
 
     return FALSE;
 }
@@ -48,143 +51,185 @@ int sonderzeichen(char *string){
  * -1: Can't receive massage from client
  * 1: Client ended session
  */
-int connect_handle(int connectionFd, Sem_Config storageSem) {
+int connect_handle(int connectionFd, Sem_Config storageSem, int msgQueueID) {
     char in[BUFFSIZE], out[BUFFSIZE];
 
     int transaction = 0;
-    while(1) {
-        bzero(in, BUFFSIZE);
-        bzero(out, BUFFSIZE);
-
-        // Receive Command from client
-        if(recv(connectionFd, in , BUFFSIZE, 0) == -1) {
-            perror("ERROR: Can't receive massage from client");
-            return -1;
-        }
-
-        // Interpret massage from client
-        Command command = interpret(strtok(in, " "));
-
-        switch (command) {
-            case PUT: {
-                char* key = strtok(NULL, " ");
-                char* value = strtok(NULL, "\r");
-                if(key == NULL || value == NULL) {
-                    strcpy(out, "command_nonexistent");
-                }
-                else if(sonderzeichen(key) == 0 || sonderzeichen(value) == 0){
-                    strcpy(out,"special_characters_not_allowed");
-                }
-                else {
-                    printf("Key: %s\n", key);
-                    printf("Value: %s\n", value);
-
-                    strcpy(out, "PUT :");
-                    strcat(out, key);
-                    if(transaction == 0)
-                        semop(storageSem.ID, &storageSem.down, 1);
-                    if (put(key, value) > -1) {
-                        if(transaction == 0)
-                            semop(storageSem.ID, &storageSem.up, 1);
-                        strcat(out, ":");
-                        strcat(out, value);
-                    } else {
-                        if(transaction == 0)
-                            semop(storageSem.ID, &storageSem.up, 1);
-                        strcat(out, ":no_space_for_new_key");
-                    }
-                }
-                break;
-            };
-            case GET: {
-                char* key= strtok(NULL, "\r");
-
-                if(key == NULL) {
-                    strcpy(out, "command_nonexistent");
-                }
-                else {
-                    char value[BUFFSIZE];
-
-                    strcpy(out, "GET :");
-                    strcat(out, key);
-                    if(transaction == 0)
-                        semop(storageSem.ID, &storageSem.down, 1);
-                    if (get(key, value) == 1) {
-                        if(transaction == 0)
-                            semop(storageSem.ID, &storageSem.up, 1);
-                        strcat(out, ":");
-                        strcat(out, value);
-                        puts(value);
-                    } else {
-                        if(transaction == 0)
-                            semop(storageSem.ID, &storageSem.up, 1);
-                        strcat(out, ":key_nonexistent");
-                    }
-                }
-                break;
-            };
-            case DEL: {
-                char* key= strtok(NULL, "\r");
-                if(key== NULL) {
-                    strcpy(out, "command_nonexistent");
-                }
-                else{
-                    strcpy(out, "DEL :");
-                    strcat(out, key);
-                    if(transaction == 0)
-                        semop(storageSem.ID, &storageSem.down, 1);
-                    if (del(key) == 1) {
-                        if(transaction == 0)
-                            semop(storageSem.ID, &storageSem.up, 1);
-                        strcat(out, ":key_deleted");
-                    } else {
-                        if(transaction == 0)
-                            semop(storageSem.ID, &storageSem.up, 1);
-                        strcat(out, ":key_nonexistent");
-                    }
-                }
-                break;
-            };
-            case BEG: {
-                if(transaction == 0) {
-                    semop(storageSem.ID, &storageSem.down, 1);
-                    transaction = 1;
-                    strcat(out, "transaction_started");
-                }
-                else
-                    strcat(out, "transaction_already_in_progress");
-                break;
+    int pid = fork();
+    if(pid == 0){           //Prozess, der Nachrichten aus der Warteschlange mit dem Typ seiner PID liest.
+        Text_message message;
+        while(1) {
+            int v = msgrcv(msgQueueID, &message, KEYSIZE, getpid(), 0);
+            if (v < 0) {
+                perror("ERROR: Can't receive subcription news from queue");
+                exit(EXIT_FAILURE);
+            } else {
+                bzero(out, BUFFSIZE);
+                strcpy(out, "Key: ");
+                strcat(out, message.mkey);
+                strcat(out, " has changed");
+                strcat(out, " (PID: ");
+                //strcat(out, (const char*) message.mtype);
+                strcat(out, ")\n");
+                send(connectionFd, out, BUFFSIZE, 0);
             }
-            case END: {
-                if(transaction == 1) {
-                    transaction = 0;
-                    semop(storageSem.ID, &storageSem.up, 1);
-                    strcat(out, "transaction_stopped");
-                }
-                else
-                    strcat(out, "no_transaction_in_progress");
-                break;
-            }
-            case QUIT: {
-                shutdown(connectionFd, SHUT_RDWR);
-                close(connectionFd);
-                return 1;
-            };
-            case FALSE: {
-                strcpy(out,"command_nonexistent");
-                break;
-            };
-            default:
-                break;
         }
-        // New line after output
-        strcat(out, "\n");
+    }
+    else {
+        while (1) {
+            bzero(in, BUFFSIZE);
+            bzero(out, BUFFSIZE);
 
-        send(connectionFd, out, BUFFSIZE, 0);
+            // Receive Command from client
+            if (recv(connectionFd, in, BUFFSIZE, 0) == -1) {
+                perror("ERROR: Can't receive massage from client");
+                return -1;
+            }
+
+            // Interpret massage from client
+            Command command = interpret(strtok(in, " "));
+
+            switch (command) {
+                case PUT: {
+                    char *key = strtok(NULL, " ");
+                    char *value = strtok(NULL, "\r");
+                    if (key == NULL || value == NULL) {
+                        strcpy(out, "command_nonexistent");
+                    } else if (sonderzeichen(key) == 0 || sonderzeichen(value) == 0) {
+                        strcpy(out, "special_characters_not_allowed");
+                    } else {
+                        printf("Key: %s\n", key);
+                        printf("Value: %s\n", value);
+
+                        strcpy(out, "PUT :");
+                        strcat(out, key);
+                        if (transaction == 0)
+                            semop(storageSem.ID, &storageSem.down, 1);
+                        if (put(key, value) > -1) {
+                            if(pub(key, msgQueueID) == 0) {
+                                perror("ERROR: Can't send subcription news to queue");
+                                exit(EXIT_FAILURE);
+                            } else {
+                                if (transaction == 0)
+                                    semop(storageSem.ID, &storageSem.up, 1);
+                                strcat(out, ":");
+                                strcat(out, value);
+                            }
+                        } else {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":no_space_for_new_key");
+                        }
+                    }
+                    break;
+                };
+                case GET: {
+                    char *key = strtok(NULL, "\r");
+
+                    if (key == NULL) {
+                        strcpy(out, "command_nonexistent");
+                    } else {
+                        char value[BUFFSIZE];
+
+                        strcpy(out, "GET :");
+                        strcat(out, key);
+                        if (transaction == 0)
+                            semop(storageSem.ID, &storageSem.down, 1);
+                        if (get(key, value) == 1) {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":");
+                            strcat(out, value);
+                            puts(value);
+                        } else {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":key_nonexistent");
+                        }
+                    }
+                    break;
+                };
+                case DEL: {
+                    char *key = strtok(NULL, "\r");
+                    if (key == NULL) {
+                        strcpy(out, "command_nonexistent");
+                    } else {
+                        strcpy(out, "DEL :");
+                        strcat(out, key);
+                        if (transaction == 0)
+                            semop(storageSem.ID, &storageSem.down, 1);
+                        if (del(key) == 1) {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":key_deleted");
+                        } else {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":key_nonexistent");
+                        }
+                    }
+                    break;
+                };
+                case BEG: {
+                    if (transaction == 0) {
+                        semop(storageSem.ID, &storageSem.down, 1);
+                        transaction = 1;
+                        strcat(out, "transaction_started");
+                    } else
+                        strcat(out, "transaction_already_in_progress");
+                    break;
+                }
+                case END: {
+                    if (transaction == 1) {
+                        transaction = 0;
+                        semop(storageSem.ID, &storageSem.up, 1);
+                        strcat(out, "transaction_stopped");
+                    } else
+                        strcat(out, "no_transaction_in_progress");
+                    break;
+                }
+                case SUB: {
+                    char *key = strtok(NULL, "\r");
+                    if (key == NULL) {
+                        strcpy(out, "command_nonexistent");
+                    } else {
+                        strcpy(out, "SUB :");
+                        strcat(out, key);
+                        if (transaction == 0)
+                            semop(storageSem.ID, &storageSem.down, 1);
+                        if (sub(key, pid) == 1) {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":subscribed");
+                        } else {
+                            if (transaction == 0)
+                                semop(storageSem.ID, &storageSem.up, 1);
+                            strcat(out, ":subscription_failed");
+                        }
+                    }
+                    break;
+                }
+                case QUIT: {
+                    shutdown(connectionFd, SHUT_RDWR);
+                    close(connectionFd);
+                    return 1;
+                };
+                case FALSE: {
+                    strcpy(out, "command_nonexistent");
+                    break;
+                };
+                default:
+                    break;
+            }
+            // New line after output
+            strcat(out, "\n");
+
+            send(connectionFd, out, BUFFSIZE, 0);
+        }
     }
 }
 
-void new_process(int cfd, int storageId, Sem_Config storageSem) {
+void new_process(int cfd, int storageId, Sem_Config storageSem, int msgQueueID) {
     void* shmMem = shmat(storageId, NULL, 0);
     if(shmMem == (void *) 1) {
         perror("Can't attach shared storage to child process");
@@ -193,7 +238,7 @@ void new_process(int cfd, int storageId, Sem_Config storageSem) {
     Storage* storage = (Storage *) shmMem;
     storage_set(storage);
 
-    connect_handle(cfd, storageSem);
+    connect_handle(cfd, storageSem, msgQueueID);
 
     storage_unset();
     shmdt(storage);
@@ -259,6 +304,9 @@ void connection_controlling(Config* config) {
     sigaddset(&set, SIGCHLD);
     sigaddset(&set, SIGTERM);
 
+    //Anlegen der Warteschlange
+    int msgQueueID = msgget(IPC_PRIVATE, IPC_CREAT | 0664);
+
     // Verbindung eines Clients wird entgegengenommen
     while (1) {
 
@@ -271,7 +319,7 @@ void connection_controlling(Config* config) {
         if(connections.len < connections.cap) {
             int pid = fork();
             if(pid == 0)
-                new_process(cfd, config->storageId, config->storageSem);
+                new_process(cfd, config->storageId, config->storageSem, msgQueueID);
             else {
                 sigprocmask(SIG_BLOCK, &set, NULL);
                 connections_push(&connections, connection_new(pid, cfd));
