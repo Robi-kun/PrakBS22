@@ -64,13 +64,13 @@ int connect_handle(int connectionFd, Sem_Config storageSem, int msgQueueID) {
                 perror("ERROR: Can't receive subcription news from queue");
                 exit(EXIT_FAILURE);
             } else {
+                char *key = strtok(message.mkey, "|");
+                char *value = strtok(NULL, "");
                 bzero(out, BUFFSIZE);
                 strcpy(out, "Key: ");
-                strcat(out, message.mkey);
-                strcat(out, " has changed");
-                strcat(out, " (PID: ");
-                //strcat(out, (const char*) message.mtype);
-                strcat(out, ")\n");
+                strcat(out, key);
+                strcat(out, " has changed to ");
+                strcat(out, value);
                 send(connectionFd, out, BUFFSIZE, 0);
             }
         }

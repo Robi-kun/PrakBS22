@@ -98,7 +98,9 @@ int pub(char* key, int msgQueueID){
                 if(storage->data[i].subs[j] != -1) {
                     Text_message message;
                     message.mtype = storage->data[i].subs[j];
-                    strcpy(message.mkey, key);
+                    strcpy(message.mkey, storage->data[i].key);
+                    strcat(message.mkey, "|");
+                    strcat(message.mkey, storage->data[i].value);
                     if (msgsnd(msgQueueID, &message, strlen(message.mkey), 0) < 0)
                         return 0;
                 }
