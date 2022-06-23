@@ -57,8 +57,8 @@ int connect_handle(int connectionFd, Sem_Config storageSem, int msgQueueID) {
     int transaction = 0;
     int pid = fork();
     if(pid == 0){           //Prozess, der Nachrichten aus der Warteschlange mit dem Typ seiner PID liest.
-        Text_message message;
         while(1) {
+            Text_message message;
             int v = msgrcv(msgQueueID, &message, KEYSIZE, getpid(), 0);
             if (v < 0) {
                 perror("ERROR: Can't receive subcription news from queue");
@@ -69,8 +69,9 @@ int connect_handle(int connectionFd, Sem_Config storageSem, int msgQueueID) {
                 bzero(out, BUFFSIZE);
                 strcpy(out, "Key: ");
                 strcat(out, key);
-                strcat(out, " has changed to ");
+                strcat(out, " has changed to Value: ");
                 strcat(out, value);
+                strcat(out, "\n");
                 send(connectionFd, out, BUFFSIZE, 0);
             }
         }
